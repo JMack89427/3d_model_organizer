@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+</head>
+<body>
+    <h1>Upload a File</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <label for="file">Choose a file:</label>
+        <input type="file" name="file" id="file" required><br><br>
+
+        <label for="creator">Creator:</label>
+        <select name="creator" id="creator" required>
+            <option value="creator1">Creator 1</option>
+            <option value="creator2">Creator 2</option>
+            <option value="creator3">Creator 3</option>
+        </select><br><br>
+
+        <label for="model">Model:</label>
+        <select name="model" id="model" required>
+            <option value="model1">Model 1</option>
+            <option value="model2">Model 2</option>
+            <option value="model3">Model 3</option>
+        </select><br><br>
+
+        <label for="file_type">File Type:</label>
+        <select name="file_type" id="file_type" required>
+            <option value="type1">Type 1</option>
+            <option value="type2">Type 2</option>
+            <option value="type3">Type 3</option>
+        </select><br><br>
+
+        <button type="submit">Upload File</button>
+    </form>
+</body>
+</html>

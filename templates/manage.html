@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Entries</title>
+</head>
+<body>
+    <h1>Manage Entries</h1>
+    <form action="{{ url_for('add_entry') }}" method="POST">
+        <label for="creator">Creator:</label>
+        <input type="text" id="creator" name="creator" required>
+        <label for="model">Model:</label>
+        <input type="text" id="model" name="model" required>
+        <label for="file_type">File Type:</label>
+        <input type="text" id="file_type" name="file_type" required>
+        <label for="filename">Filename:</label>
+        <input type="text" id="filename" name="filename" required>
+        <button type="submit">Add Entry</button>
+    </form>
+    <h2>Existing Entries</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Creator</th>
+                <th>Model</th>
+                <th>File Type</th>
+                <th>Filename</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for model in models %}
+            <tr>
+                <td>{{ model.id }}</td>
+                <td>{{ model.creator }}</td>
+                <td>{{ model.model }}</td>
+                <td>{{ model.file_type }}</td>
+                <td>{{ model.filename }}</td>
+                <td>
+                    <form action="{{ url_for('delete_entry', id=model.id) }}" method="POST" style="display:inline;">
+                        <button type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
