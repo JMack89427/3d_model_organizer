@@ -35,12 +35,12 @@ def call_local_llm(metadata_dict, filename):
 
     Return a JSON object with keys: creator, filename, filetype.
     """
-
+    
     try:
         response = requests.post(
             "http://host.docker.internal:11434/api/generate",
             json={
-                "model": "mistral",
+                "model": "llama3",
                 "prompt": prompt,
                 "stream": False
             },
