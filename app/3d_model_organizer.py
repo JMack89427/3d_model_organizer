@@ -46,15 +46,27 @@ def upload_file():
     if 'error' in prediction:
         return jsonify({'error': prediction['error']}), 500
 
-    creator = prediction.get('creator', 'Unknown')
-    model_name = prediction.get('filename', file.filename)
-    file_type = prediction.get('filetype', 'unknown')
+    # Pass prediction to confirmation page
+    return render_template(
+        'confirm.html',
+        creator=prediction.get('creator', 'Unknown'),
+        model_name=prediction.get('filename', file.filename),
+        file_type=prediction.get('filetype', 'Unknown'),
+        filename=file.filename
+    )
 
-    new_model = Model(creator=creator, model=model_name, file_type=file_type, filename=file.filename)
+@app.route('/confirm', methods=['POST'])
+def confirm_prediction():
+    creator = request.form.get('creator')
+    model_name = request.form.get('model_name')
+    file_type = request.form.get('file_type')
+    filename = request.form.get('filename')
+
+    new_model = Model(creator=creator, model=model_name, file_type=file_type, filename=filename)
     db.session.add(new_model)
     db.session.commit()
 
-    return jsonify({'success': 'File uploaded and analyzed successfully', 'prediction': prediction}), 201
+    return redirect(url_for('manage_entries'))
 
 @app.route('/manage')
 def manage_entries():

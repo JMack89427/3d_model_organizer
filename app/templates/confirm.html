@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Confirm Metadata</title>
+</head>
+<body>
+    <h1>Confirm Metadata Prediction</h1>
+    <form action="{{ url_for('confirm_prediction') }}" method="POST">
+        <label>Creator:</label>
+        <input type="text" name="creator" value="{{ creator }}"><br><br>
+
+        <label>Model Name:</label>
+        <input type="text" name="model_name" value="{{ model_name }}"><br><br>
+
+        <label>File Type:</label>
+        <input type="text" name="file_type" value="{{ file_type }}"><br><br>
+
+        <input type="hidden" name="filename" value="{{ filename }}">
+
+        <button type="submit">Save</button>
+    </form>
+</body>
+</html>
