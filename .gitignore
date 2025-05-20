@@ -9,7 +9,7 @@
 *.user
 *.userosscache
 *.sln.docstates
-app/instance/*
+app/instance/models.db
 app/test_files/*
 app/uploads/*
 !app/uploads/.gitkeep
