@@ -1,7 +1,9 @@
+import os
+import json
+import subprocess
+from stl import mesh
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
-import os
-from waitress import serve
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -11,7 +13,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Create the upload directory if it doesn't exist
+# Ensure upload directory exists
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
@@ -22,38 +24,37 @@ class Model(db.Model):
     file_type = db.Column(db.String(20), nullable=False)
     filename = db.Column(db.String(120), nullable=False)
 
-# @app.route('/')
-# def index():
-#     print("Current working directory:", os.getcwd())
-#     return render_template('index.html')  # Remove 'templates/' prefix
 @app.route('/')
 def index():
-    return "<h1>Hello, Flask is working!</h1>"
+    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request'}), 400
-    
-    file = request.files['file']
-    creator = request.form.get('creator')
-    model = request.form.get('model')
-    file_type = request.form.get('file_type')
 
+    file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-    
-    if not creator or not model or not file_type:
-        return jsonify({'error': 'Missing directory information'}), 400
-    
+
     filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(filename)
 
-    new_model = Model(creator=creator, model=model, file_type=file_type, filename=file.filename)
+    from ai_model.ai_metadata_prediction import analyze_stl
+    prediction = analyze_stl(filename)
+
+    if 'error' in prediction:
+        return jsonify({'error': prediction['error']}), 500
+
+    creator = prediction.get('creator', 'Unknown')
+    model_name = prediction.get('filename', file.filename)
+    file_type = prediction.get('filetype', 'unknown')
+
+    new_model = Model(creator=creator, model=model_name, file_type=file_type, filename=file.filename)
     db.session.add(new_model)
     db.session.commit()
 
-    return jsonify({'success': 'File successfully uploaded'}), 201
+    return jsonify({'success': 'File uploaded and analyzed successfully', 'prediction': prediction}), 201
 
 @app.route('/manage')
 def manage_entries():
@@ -81,10 +82,8 @@ def delete_entry(id):
         db.session.commit()
     return redirect(url_for('manage_entries'))
 
-def create_app_context():
-    with app.app_context():
-        db.create_all()
+with app.app_context():
+    db.create_all()
 
 if __name__ == '__main__':
-    create_app_context()
     app.run(host='0.0.0.0', port=5050, debug=True)

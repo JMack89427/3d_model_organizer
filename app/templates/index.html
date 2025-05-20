@@ -6,33 +6,44 @@
     <title>File Upload</title>
 </head>
 <body>
-    <h1>Upload a File</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <label for="file">Choose a file:</label>
-        <input type="file" name="file" id="file" required><br><br>
+    {% if not file_uploaded %}
+        <h1>Upload a File</h1>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <label for="file">Choose a file:</label>
+            <input type="file" name="file" id="file" required>
+            <button type="submit">Upload File</button>
+        </form>
+    {% elif not show_form %}
+        <h2>Analyzing your file, please wait...</h2>
+    {% else %}
+        <h1>File Details</h1>
+        <form action="/details" method="post">
+            <label for="creator">Creator:</label>
+            <input list="creators" name="creator" id="creator" required>
+            <datalist id="creators">
+              {% for creator in creators %}
+                <option value="{{ creator }}">
+              {% endfor %}
+            </datalist><br><br>
 
-        <label for="creator">Creator:</label>
-        <select name="creator" id="creator" required>
-            <option value="creator1">Creator 1</option>
-            <option value="creator2">Creator 2</option>
-            <option value="creator3">Creator 3</option>
-        </select><br><br>
+            <label for="model">Model:</label>
+            <input list="models" name="model" id="model" required>
+            <datalist id="models">
+              {% for model in models %}
+                <option value="{{ model }}">
+              {% endfor %}
+            </datalist><br><br>
 
-        <label for="model">Model:</label>
-        <select name="model" id="model" required>
-            <option value="model1">Model 1</option>
-            <option value="model2">Model 2</option>
-            <option value="model3">Model 3</option>
-        </select><br><br>
+            <label for="file_type">File Type:</label>
+            <input list="file_types" name="file_type" id="file_type" required>
+            <datalist id="file_types">
+              {% for file_type in file_types %}
+                <option value="{{ file_type }}">
+              {% endfor %}
+            </datalist><br><br>
 
-        <label for="file_type">File Type:</label>
-        <select name="file_type" id="file_type" required>
-            <option value="type1">Type 1</option>
-            <option value="type2">Type 2</option>
-            <option value="type3">Type 3</option>
-        </select><br><br>
-
-        <button type="submit">Upload File</button>
-    </form>
+            <button type="submit">Submit Details</button>
+        </form>
+    {% endif %}
 </body>
 </html>
