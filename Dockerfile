@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 # Set the working directory
 WORKDIR /app
@@ -16,7 +16,7 @@ COPY app/ .
 RUN mkdir -p uploads
 
 # Expose the port the app runs on
-EXPOSE 5000
+EXPOSE 5050
 
 # Command to run the application
 CMD ["python", "3d_model_organizer.py"]

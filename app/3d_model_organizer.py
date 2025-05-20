@@ -24,7 +24,7 @@ class Model(db.Model):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html')  # Remove 'templates/' prefix
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -83,4 +83,4 @@ def create_app_context():
 
 if __name__ == '__main__':
     create_app_context()
-    serve(app, port=5000, host='localhost')
+    app.run(host='0.0.0.0', port=5050, debug=True)
