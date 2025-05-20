@@ -84,6 +84,6 @@ See TL;DR or follow full setup in the main readme section above.
 
 ## 📜 License
 
-MIT
+GPL3
 
 ---
