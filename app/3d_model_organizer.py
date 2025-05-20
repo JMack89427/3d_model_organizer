@@ -24,6 +24,7 @@ class Model(db.Model):
 
 @app.route('/')
 def index():
+    print("Current working directory:", os.getcwd())
     return render_template('index.html')  # Remove 'templates/' prefix
 
 @app.route('/upload', methods=['POST'])
