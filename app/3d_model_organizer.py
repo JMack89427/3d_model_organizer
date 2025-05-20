@@ -22,10 +22,13 @@ class Model(db.Model):
     file_type = db.Column(db.String(20), nullable=False)
     filename = db.Column(db.String(120), nullable=False)
 
+# @app.route('/')
+# def index():
+#     print("Current working directory:", os.getcwd())
+#     return render_template('index.html')  # Remove 'templates/' prefix
 @app.route('/')
 def index():
-    print("Current working directory:", os.getcwd())
-    return render_template('index.html')  # Remove 'templates/' prefix
+    return "<h1>Hello, Flask is working!</h1>"
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
