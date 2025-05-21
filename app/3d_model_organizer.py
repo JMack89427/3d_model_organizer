@@ -24,6 +24,7 @@ class Model(db.Model):
     model = db.Column(db.String(120), nullable=False)
     file_type = db.Column(db.String(20), nullable=False)
     filename = db.Column(db.String(120), nullable=False)
+    original_filename = db.Column(db.String(120), nullable=False)  # New column for original filename
 
 def web_enrich_prompt(filename):
     try:
@@ -143,7 +144,8 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    original_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    original_filename = file.filename  # Store the original filename
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
     file.save(original_path)
 
     prediction = analyze_stl(original_path)
@@ -167,7 +169,8 @@ def upload_file():
         creator=prediction.get('creator', 'Unknown'),
         model_name=prediction.get('filename', file.filename),
         file_type=prediction.get('filetype', 'Unknown'),
-        filename=new_filename,  # Pass the new filename
+        filename=new_filename,  # New filename
+        original_filename=original_filename,  # Pass original filename to template
         web_context=prediction.get('web_context', ''),
         prompt_data=prediction.get('prompt', ''),
         llm_response=prediction.get('raw_response', '')
@@ -179,8 +182,15 @@ def confirm_prediction():
     model_name = request.form.get('model_name')
     file_type = request.form.get('file_type')
     filename = request.form.get('filename')
+    original_filename = request.form.get('original_filename')
 
-    new_model = Model(creator=creator, model=model_name, file_type=file_type, filename=filename)
+    new_model = Model(
+        creator=creator,
+        model=model_name,
+        file_type=file_type,
+        filename=filename,
+        original_filename=original_filename
+    )
     db.session.add(new_model)
     db.session.commit()
 
@@ -191,17 +201,24 @@ def manage_entries():
     models = Model.query.all()
     return render_template('manage.html', models=models)
 
-@app.route('/add', methods=['POST'])
+@app.route('/add_entry', methods=['POST'])
 def add_entry():
-    creator = request.form.get('creator')
-    model = request.form.get('model')
-    file_type = request.form.get('file_type')
-    filename = request.form.get('filename')
-
-    new_model = Model(creator=creator, model=model, file_type=file_type, filename=filename)
+    creator = request.form['creator']
+    model_name = request.form['model']
+    file_type = request.form['file_type']
+    filename = request.form['filename']
+    original_filename = request.form['original_filename']
+    
+    new_model = Model(
+        creator=creator,
+        model=model_name,
+        file_type=file_type,
+        filename=filename,
+        original_filename=original_filename
+    )
     db.session.add(new_model)
     db.session.commit()
-
+    
     return redirect(url_for('manage_entries'))
 
 @app.route('/delete/<int:id>', methods=['POST'])
