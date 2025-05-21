@@ -4,8 +4,6 @@ waitress==2.1.2
 numpy-stl
 requests
 numpy
-pandas
-scikit-learn
-scipy
-scikit-image
+trimesh
+meshio
 duckduckgo-search

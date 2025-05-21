@@ -1,10 +1,8 @@
 import os
-import json
-import subprocess
-from stl import mesh
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
-from duckduckgo_search import DDGS
+# from duckduckgo_search import DDGS
+from ai_model.ai_metadata_prediction import analyze_stl
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -26,110 +24,110 @@ class Model(db.Model):
     filename = db.Column(db.String(120), nullable=False)
     original_filename = db.Column(db.String(120), nullable=False)  # New column for original filename
 
-def web_enrich_prompt(filename):
-    try:
-        base = os.path.splitext(filename)[0]
-        chunks = base.replace('-', ' ').replace('_', ' ').split()
-        search_terms_list = [chunk for chunk in set(chunks) if len(chunk) > 2]
-        if not search_terms_list:
-            return ""
-        query_terms = " ".join(search_terms_list)
-        results = []
-        sites = ["patreon.com", "myminifactory.com", "printables.com"]
-        with DDGS() as ddgs:
-            for site in sites:
-                query = f"{query_terms} site:{site}"
-                for i, r in enumerate(ddgs.text(query, max_results=2)):  # Limit to 2 results per site
-                    title = r.get('title', '').strip()
-                    body = r.get('body', '').strip().split('\n')[0]  # Only first line of body
-                    if title or body:
-                        results.append(f"{title}: {body}")
-        # Limit total results to 5
-        return "\n".join(results[:5])
-    except Exception as e:
-        return f"(Web enrichment failed: {str(e)})"
+# def web_enrich_prompt(filename):
+#     try:
+#         base = os.path.splitext(filename)[0]
+#         chunks = base.replace('-', ' ').replace('_', ' ').split()
+#         search_terms_list = [chunk for chunk in set(chunks) if len(chunk) > 2]
+#         if not search_terms_list:
+#             return ""
+#         query_terms = " ".join(search_terms_list)
+#         results = []
+#         sites = ["patreon.com", "myminifactory.com", "printables.com"]
+#         with DDGS() as ddgs:
+#             for site in sites:
+#                 query = f"{query_terms} site:{site}"
+#                 for i, r in enumerate(ddgs.text(query, max_results=2)):  # Limit to 2 results per site
+#                     title = r.get('title', '').strip()
+#                     body = r.get('body', '').strip().split('\n')[0]  # Only first line of body
+#                     if title or body:
+#                         results.append(f"{title}: {body}")
+#         # Limit total results to 5
+#         return "\n".join(results[:5])
+#     except Exception as e:
+#         return f"(Web enrichment failed: {str(e)})"
 
-def extract_stl_metadata(filepath):
-    try:
-        model = mesh.Mesh.from_file(filepath)
-        num_triangles = len(model)
-        min_ = model.min_.tolist()
-        max_ = model.max_.tolist()
-        volume = model.get_mass_properties()[0]
+# def extract_stl_metadata(filepath):
+#     try:
+#         model = mesh.Mesh.from_file(filepath)
+#         num_triangles = len(model)
+#         min_ = model.min_.tolist()
+#         max_ = model.max_.tolist()
+#         volume = model.get_mass_properties()[0]
 
-        return {
-            "num_triangles": num_triangles,
-            "bounding_box_min": min_,
-            "bounding_box_max": max_,
-            "volume": volume,
-            "filename": os.path.basename(filepath)
-        }
-    except Exception as e:
-        return {"error": f"Failed to parse STL: {str(e)}"}
+#         return {
+#             "num_triangles": num_triangles,
+#             "bounding_box_min": min_,
+#             "bounding_box_max": max_,
+#             "volume": volume,
+#             "filename": os.path.basename(filepath)
+#         }
+#     except Exception as e:
+#         return {"error": f"Failed to parse STL: {str(e)}"}
 
-def call_local_llm(metadata_dict):
-    web_context = web_enrich_prompt(metadata_dict.get("filename", "3d model"))
-    prompt = f"""
-Use the following web results to help answer:
+# def call_local_llm(metadata_dict):
+#     web_context = web_enrich_prompt(metadata_dict.get("filename", "3d model"))
+#     prompt = f"""
+# Use the following web results to help answer:
 
-{web_context}
+# {web_context}
 
-Then, using this metadata:
+# Then, using this metadata:
 
-{json.dumps(metadata_dict, indent=2)}
+# {json.dumps(metadata_dict, indent=2)}
 
-Predict:
-- Creator
-- Original filename
-- File type
+# Predict:
+# - Creator
+# - Original filename
+# - File type
 
-Return JSON with: creator, filename, filetype.
-"""
-    try:
-        result = subprocess.run(
-            ["ollama", "run", "llama3"],
-            input=prompt.encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=30
-        )
+# Return JSON with: creator, filename, filetype.
+# """
+#     try:
+#         result = subprocess.run(
+#             ["ollama", "run", "llama3"],
+#             input=prompt.encode("utf-8"),
+#             stdout=subprocess.PIPE,
+#             stderr=subprocess.PIPE,
+#             timeout=30
+#         )
 
-        if result.returncode != 0:
-            return {"error": result.stderr.decode("utf-8")}
+#         if result.returncode != 0:
+#             return {"error": result.stderr.decode("utf-8")}
 
-        response = result.stdout.decode("utf-8")
+#         response = result.stdout.decode("utf-8")
 
-        # Try to extract JSON from response
-        start = response.find('{')
-        end = response.rfind('}') + 1
-        json_str = response[start:end]
-        llm_response = json.loads(json_str)
-        return {
-            "llm_response": llm_response,
-            "web_context": web_context,
-            "prompt": prompt,
-            "raw_response": response
-        }
+#         # Try to extract JSON from response
+#         start = response.find('{')
+#         end = response.rfind('}') + 1
+#         json_str = response[start:end]
+#         llm_response = json.loads(json_str)
+#         return {
+#             "llm_response": llm_response,
+#             "web_context": web_context,
+#             "prompt": prompt,
+#             "raw_response": response
+#         }
 
-    except Exception as e:
-        return {"error": f"LLM call failed: {str(e)}"}
+#     except Exception as e:
+#         return {"error": f"LLM call failed: {str(e)}"}
 
-def analyze_stl(filepath):
-    metadata = extract_stl_metadata(filepath)
-    if "error" in metadata:
-        return metadata
+# def analyze_stl(filepath):
+#     metadata = extract_stl_metadata(filepath)
+#     if "error" in metadata:
+#         return metadata
 
-    result = call_local_llm(metadata)
-    if "error" in result:
-        return result
+#     result = call_local_llm(metadata)
+#     if "error" in result:
+#         return result
 
-    # Merge LLM response and context fields for template
-    return {
-        **result["llm_response"],
-        "web_context": result["web_context"],
-        "prompt": result["prompt"],
-        "raw_response": result["raw_response"]
-    }
+#     # Merge LLM response and context fields for template
+#     return {
+#         **result["llm_response"],
+#         "web_context": result["web_context"],
+#         "prompt": result["prompt"],
+#         "raw_response": result["raw_response"]
+#     }
 
 @app.route('/')
 def index():
@@ -155,8 +153,15 @@ def upload_file():
 
     # Build new filename: creator_modelname.filetype
     creator = prediction.get('creator', 'Unknown').replace(' ', '_')
-    model_name = prediction.get('filename', os.path.splitext(file.filename)[0]).replace(' ', '_')
+
+    # Get model_name, ensure it has no extension
+    predicted_filename = prediction.get('filename', os.path.splitext(file.filename)[0])
+    model_name = os.path.splitext(predicted_filename)[0].replace(' ', '_')  # Remove any extension
+
+    # Get file_type, ensure it has no leading dot
     file_type = prediction.get('filetype', os.path.splitext(file.filename)[1].lstrip('.')).replace(' ', '_')
+    file_type = file_type.lstrip('.')  # Remove any leading dot
+
     new_filename = f"{creator}_{model_name}.{file_type}"
 
     new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)

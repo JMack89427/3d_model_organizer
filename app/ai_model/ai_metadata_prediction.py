@@ -1,68 +1,86 @@
 import os
 import json
+import trimesh
+import meshio
 import requests
-from stl import mesh
+from stl import mesh as stlmesh
 from duckduckgo_search import DDGS
 
+SUPPORTED_EXTENSIONS = {'.stl', '.obj', '.3mf', '.step', '.stp'}
 
-def extract_stl_metadata(filepath):
+
+def extract_metadata(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
     try:
-        model = mesh.Mesh.from_file(filepath)
-        num_triangles = len(model)
-        min_ = model.min_.tolist()
-        max_ = model.max_.tolist()
-        volume = model.get_mass_properties()[0]
-
-        return {
-            "num_triangles": num_triangles,
-            "bounding_box_min": min_,
-            "bounding_box_max": max_,
-            "volume": volume,
-            "filename": os.path.basename(filepath)
-        }
+        if ext == '.stl':
+            model = stlmesh.Mesh.from_file(filepath)
+            num_triangles = len(model)
+            min_ = model.min_.tolist()
+            max_ = model.max_.tolist()
+            volume = model.get_mass_properties()[0]
+        elif ext == '.obj':
+            model = trimesh.load(filepath, force='mesh')
+            num_triangles = len(model.faces)
+            min_, max_ = model.bounds
+            volume = model.volume
+        elif ext == '.3mf':
+            model = meshio.read(filepath)
+            num_triangles = len(model.cells_dict.get('triangle', []))
+            volume = None  # Optional, depending on mesh quality
+            min_, max_ = [0, 0, 0], [0, 0, 0]
+        elif ext in {'.step', '.stp'}:
+            return {"error": "STEP file parsing not implemented in this build."}
+        else:
+            return {"error": f"Unsupported file format: {ext}"}
     except Exception as e:
-        return {"error": f"Failed to parse STL: {str(e)}"}
+        return {"error": f"Failed to parse {ext} file: {str(e)}"}
+
+    return {
+        "file_extension": ext,
+        "num_triangles": num_triangles,
+        "bounding_box_min": min_,
+        "bounding_box_max": max_,
+        "volume": volume,
+        "filename": os.path.basename(filepath)
+    }
 
 
+# def web_enrich_prompt(filename):
+#     try:
+#         query = filename.replace('_', ' ').replace('-', ' ')
+#         search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
+#         results = []
+#         with DDGS() as ddgs:
+#             for r in ddgs.text(search_terms, max_results=5):
+#                 results.append(f"{r['title']}: {r['body']}")
+#         return "\n".join(results)
+#     except Exception as e:
+#         return f"(Web enrichment failed: {str(e)})"
 def web_enrich_prompt(filename):
     try:
-        # Break down filename into searchable chunks (remove extension, split on delimiters)
         base = os.path.splitext(filename)[0]
         chunks = base.replace('-', ' ').replace('_', ' ').split()
-        # Use unique, non-trivial chunks (length > 2)
         search_terms_list = [chunk for chunk in set(chunks) if len(chunk) > 2]
-        creators = set()
+        if not search_terms_list:
+            return ""
+        query_terms = " ".join(search_terms_list)
+        results = []
         sites = ["patreon.com", "myminifactory.com", "printables.com"]
         with DDGS() as ddgs:
-            for chunk in search_terms_list:
-                for site in sites:
-                    query = f"{chunk} site:{site}"
-                    for r in ddgs.text(query, max_results=5):
-                        # Filter out Thingiverse results
-                        if "thingiverse" in r.get('title', '').lower() or "thingiverse" in r.get('body', '').lower():
-                            continue
-                        # Try to extract creator names from title/body
-                        for text in [r.get('title', ''), r.get('body', '')]:
-                            lowered = text.lower()
-                            if "by " in lowered:
-                                # e.g. "Model Name by John Doe"
-                                parts = lowered.split("by ")
-                                if len(parts) > 1:
-                                    possible = parts[1].split()[0:3]
-                                    creators.add(" ".join(possible).title())
-                            elif "creator:" in lowered:
-                                # e.g. "creator: John Doe"
-                                parts = lowered.split("creator:")
-                                if len(parts) > 1:
-                                    possible = parts[1].split()[0:3]
-                                    creators.add(" ".join(possible).title())
-        return list(creators)
+            for site in sites:
+                query = f"{query_terms} site:{site}"
+                for i, r in enumerate(ddgs.text(query, max_results=2)):  # Limit to 2 results per site
+                    title = r.get('title', '').strip()
+                    body = r.get('body', '').strip().split('\n')[0]  # Only first line of body
+                    if title or body:
+                        results.append(f"{title}: {body}")
+        # Limit total results to 5
+        return "\n".join(results[:5])
     except Exception as e:
-        return [f"(Web enrichment failed: {str(e)})"]
+        return f"(Web enrichment failed: {str(e)})"
 
 
-def call_local_llm(metadata_dict, filepath):
-    web_context = web_enrich_prompt(filepath)
+def call_local_llm(metadata_dict, web_context=""):
     prompt = f"""
 Use the following web results to help answer:
 
@@ -80,20 +98,23 @@ Predict:
 Return JSON with: creator, filename, filetype.
 """
     try:
+        # Use HTTP API instead of subprocess
         response = requests.post(
-            "http://host.docker.internal:11434/api/generate",
+            "http://localhost:11434/api/generate",  # Local Ollama endpoint
             json={
                 "model": "llama3",
                 "prompt": prompt,
                 "stream": False
             },
-            timeout=60
+            timeout=30
         )
-        response.raise_for_status()
-        result_json = response.json()
-        output = result_json.get("response", "")
-
-        # Try to extract JSON from output
+        response.raise_for_status()  # Raise exception for HTTP errors
+        
+        # Get the actual text content from the response
+        result = response.json()
+        output = result.get("response", "")
+        
+        # Try to extract JSON from response
         start = output.find('{')
         end = output.rfind('}') + 1
         json_str = output[start:end]
@@ -102,26 +123,18 @@ Return JSON with: creator, filename, filetype.
             "llm_response": llm_response,
             "web_context": web_context,
             "prompt": prompt,
-            "raw_response": output
+            "raw_response": response
         }
 
     except Exception as e:
         return {"error": f"LLM call failed: {str(e)}"}
 
 
-def analyze_stl(filepath):
-    metadata = extract_stl_metadata(filepath)
+def analyze_stl(filepath, enrich_with_web=True):
+    metadata = extract_metadata(filepath)
     if "error" in metadata:
         return metadata
 
-    result = call_local_llm(metadata, filepath)
-    if "error" in result:
-        return result
-
-    # Merge metadata and LLM results for convenience
-    return {
-        **result["llm_response"],
-        "web_context": result["web_context"],
-        "prompt": result["prompt"],
-        "raw_response": result["raw_response"]
-    }
+    web_context = web_enrich_prompt(metadata["filename"]) if enrich_with_web else ""
+    prediction = call_local_llm(metadata, web_context=web_context)
+    return prediction
