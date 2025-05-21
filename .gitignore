@@ -10,8 +10,8 @@
 *.userosscache
 *.sln.docstates
 app/instance/models.db
-app/test_files/*
-app/uploads/*
+app/test_files/
+app/uploads/
 !app/uploads/.gitkeep
 !app/instance/.gitkeep
 
