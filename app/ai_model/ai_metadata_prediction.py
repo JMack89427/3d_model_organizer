@@ -3,7 +3,6 @@ import json
 import requests
 from stl import mesh
 from duckduckgo_search import DDGS
-import subprocess
 
 
 def extract_stl_metadata(filepath):
@@ -29,18 +28,35 @@ def web_enrich_prompt(filename):
     try:
         query = filename.replace('_', ' ').replace('-', ' ')
         search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
-        results = []
+        creators = set()
         with DDGS() as ddgs:
-            for r in ddgs.text(search_terms, max_results=5):
-                results.append(f"{r['title']}: {r['body']}")
-        return "\n".join(results)
+            for r in ddgs.text(search_terms, max_results=10):
+                # Filter out Thingiverse results
+                if "thingiverse" in r.get('title', '').lower() or "thingiverse" in r.get('body', '').lower():
+                    continue
+                # Try to extract creator names from title/body
+                for text in [r.get('title', ''), r.get('body', '')]:
+                    # Look for patterns like "by <creator>" or "creator: <creator>"
+                    lowered = text.lower()
+                    if "by " in lowered:
+                        # e.g. "Model Name by John Doe"
+                        parts = lowered.split("by ")
+                        if len(parts) > 1:
+                            possible = parts[1].split()[0:3]  # Take up to 3 words as name
+                            creators.add(" ".join(possible).title())
+                    elif "creator:" in lowered:
+                        # e.g. "creator: John Doe"
+                        parts = lowered.split("creator:")
+                        if len(parts) > 1:
+                            possible = parts[1].split()[0:3]
+                            creators.add(" ".join(possible).title())
+        return list(creators)
     except Exception as e:
-        return f"(Web enrichment failed: {str(e)})"
+        return [f"(Web enrichment failed: {str(e)})"]
 
 
 def call_local_llm(metadata_dict, filepath):
     web_context = web_enrich_prompt(filepath)
-    print (f"Web context: {web_context}")
     prompt = f"""
 Use the following web results to help answer:
 
