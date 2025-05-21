@@ -26,30 +26,36 @@ def extract_stl_metadata(filepath):
 
 def web_enrich_prompt(filename):
     try:
-        query = filename.replace('_', ' ').replace('-', ' ')
-        search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
+        # Break down filename into searchable chunks (remove extension, split on delimiters)
+        base = os.path.splitext(filename)[0]
+        chunks = base.replace('-', ' ').replace('_', ' ').split()
+        # Use unique, non-trivial chunks (length > 2)
+        search_terms_list = [chunk for chunk in set(chunks) if len(chunk) > 2]
         creators = set()
+        sites = ["patreon.com", "myminifactory.com", "printables.com"]
         with DDGS() as ddgs:
-            for r in ddgs.text(search_terms, max_results=10):
-                # Filter out Thingiverse results
-                if "thingiverse" in r.get('title', '').lower() or "thingiverse" in r.get('body', '').lower():
-                    continue
-                # Try to extract creator names from title/body
-                for text in [r.get('title', ''), r.get('body', '')]:
-                    # Look for patterns like "by <creator>" or "creator: <creator>"
-                    lowered = text.lower()
-                    if "by " in lowered:
-                        # e.g. "Model Name by John Doe"
-                        parts = lowered.split("by ")
-                        if len(parts) > 1:
-                            possible = parts[1].split()[0:3]  # Take up to 3 words as name
-                            creators.add(" ".join(possible).title())
-                    elif "creator:" in lowered:
-                        # e.g. "creator: John Doe"
-                        parts = lowered.split("creator:")
-                        if len(parts) > 1:
-                            possible = parts[1].split()[0:3]
-                            creators.add(" ".join(possible).title())
+            for chunk in search_terms_list:
+                for site in sites:
+                    query = f"{chunk} site:{site}"
+                    for r in ddgs.text(query, max_results=5):
+                        # Filter out Thingiverse results
+                        if "thingiverse" in r.get('title', '').lower() or "thingiverse" in r.get('body', '').lower():
+                            continue
+                        # Try to extract creator names from title/body
+                        for text in [r.get('title', ''), r.get('body', '')]:
+                            lowered = text.lower()
+                            if "by " in lowered:
+                                # e.g. "Model Name by John Doe"
+                                parts = lowered.split("by ")
+                                if len(parts) > 1:
+                                    possible = parts[1].split()[0:3]
+                                    creators.add(" ".join(possible).title())
+                            elif "creator:" in lowered:
+                                # e.g. "creator: John Doe"
+                                parts = lowered.split("creator:")
+                                if len(parts) > 1:
+                                    possible = parts[1].split()[0:3]
+                                    creators.add(" ".join(possible).title())
         return list(creators)
     except Exception as e:
         return [f"(Web enrichment failed: {str(e)})"]
