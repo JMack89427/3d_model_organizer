@@ -10,9 +10,8 @@
 *.userosscache
 *.sln.docstates
 app/instance/models.db
-app/test_files/
-app/uploads/
-!app/uploads/.gitkeep
+uploads/
+!uploads/.gitkeep
 !app/instance/.gitkeep
 
 # User-specific files (MonoDevelop/Xamarin Studio)
