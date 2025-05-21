@@ -27,13 +27,24 @@ class Model(db.Model):
 
 def web_enrich_prompt(filename):
     try:
-        query = filename.replace('_', ' ').replace('-', ' ')
-        search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
+        base = os.path.splitext(filename)[0]
+        chunks = base.replace('-', ' ').replace('_', ' ').split()
+        search_terms_list = [chunk for chunk in set(chunks) if len(chunk) > 2]
+        if not search_terms_list:
+            return ""
+        query_terms = " ".join(search_terms_list)
         results = []
+        sites = ["patreon.com", "myminifactory.com", "printables.com"]
         with DDGS() as ddgs:
-            for r in ddgs.text(search_terms, max_results=5):
-                results.append(f"{r['title']}: {r['body']}")
-        return "\n".join(results)
+            for site in sites:
+                query = f"{query_terms} site:{site}"
+                for i, r in enumerate(ddgs.text(query, max_results=2)):  # Limit to 2 results per site
+                    title = r.get('title', '').strip()
+                    body = r.get('body', '').strip().split('\n')[0]  # Only first line of body
+                    if title or body:
+                        results.append(f"{title}: {body}")
+        # Limit total results to 5
+        return "\n".join(results[:5])
     except Exception as e:
         return f"(Web enrichment failed: {str(e)})"
 
@@ -132,20 +143,31 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(filename)
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(original_path)
 
-    prediction = analyze_stl(filename)
+    prediction = analyze_stl(original_path)
 
     if 'error' in prediction:
         return jsonify({'error': prediction['error']}), 500
+
+    # Build new filename: creator_modelname.filetype
+    creator = prediction.get('creator', 'Unknown').replace(' ', '_')
+    model_name = prediction.get('filename', os.path.splitext(file.filename)[0]).replace(' ', '_')
+    file_type = prediction.get('filetype', os.path.splitext(file.filename)[1].lstrip('.')).replace(' ', '_')
+    new_filename = f"{creator}_{model_name}.{file_type}"
+
+    new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+    # Rename the file if the name has changed
+    if original_path != new_path:
+        os.rename(original_path, new_path)
 
     return render_template(
         'confirm.html',
         creator=prediction.get('creator', 'Unknown'),
         model_name=prediction.get('filename', file.filename),
         file_type=prediction.get('filetype', 'Unknown'),
-        filename=file.filename,
+        filename=new_filename,  # Pass the new filename
         web_context=prediction.get('web_context', ''),
         prompt_data=prediction.get('prompt', ''),
         llm_response=prediction.get('raw_response', '')

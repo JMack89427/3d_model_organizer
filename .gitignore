@@ -9,11 +9,11 @@
 *.user
 *.userosscache
 *.sln.docstates
-/instance/*
-/uploads/*
-/backup
-!/uploads/.gitkeep
-!/instance/.gitkeep
+instance/models.db
+uploads/*
+backup
+!uploads/.gitkeep
+!instance/.gitkeep
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
