@@ -3,6 +3,7 @@ import json
 import requests
 from stl import mesh
 from duckduckgo_search import DDGS
+import subprocess
 
 
 def extract_stl_metadata(filepath):
@@ -27,7 +28,7 @@ def extract_stl_metadata(filepath):
 def web_enrich_prompt(filename):
     try:
         query = filename.replace('_', ' ').replace('-', ' ')
-        search_terms = f"{query} site:patreon.com OR site:thingiverse.com OR site:printables.com"
+        search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(search_terms, max_results=5):
@@ -37,7 +38,9 @@ def web_enrich_prompt(filename):
         return f"(Web enrichment failed: {str(e)})"
 
 
-def call_local_llm(metadata_dict, web_context=""):
+def call_local_llm(metadata_dict, filepath):
+    web_context = web_enrich_prompt(filepath)
+    print (f"Web context: {web_context}")
     prompt = f"""
 Use the following web results to help answer:
 
@@ -65,24 +68,38 @@ Return JSON with: creator, filename, filetype.
             timeout=60
         )
         response.raise_for_status()
-        result = response.json()
-        output = result.get("response", "")
+        result_json = response.json()
+        output = result_json.get("response", "")
 
         # Try to extract JSON from output
         start = output.find('{')
         end = output.rfind('}') + 1
         json_str = output[start:end]
-        return json.loads(json_str)
+        llm_response = json.loads(json_str)
+        return {
+            "llm_response": llm_response,
+            "web_context": web_context,
+            "prompt": prompt,
+            "raw_response": output
+        }
 
     except Exception as e:
         return {"error": f"LLM call failed: {str(e)}"}
 
 
-def analyze_stl(filepath, enrich_with_web=True):
+def analyze_stl(filepath):
     metadata = extract_stl_metadata(filepath)
     if "error" in metadata:
         return metadata
 
-    web_context = web_enrich_prompt(metadata["filename"]) if enrich_with_web else ""
-    prediction = call_local_llm(metadata, web_context=web_context)
-    return prediction
+    result = call_local_llm(metadata, filepath)
+    if "error" in result:
+        return result
+
+    # Merge metadata and LLM results for convenience
+    return {
+        **result["llm_response"],
+        "web_context": result["web_context"],
+        "prompt": result["prompt"],
+        "raw_response": result["raw_response"]
+    }

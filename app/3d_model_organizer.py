@@ -130,7 +130,10 @@ def upload_file():
         creator=prediction.get('creator', 'Unknown'),
         model_name=prediction.get('filename', file.filename),
         file_type=prediction.get('filetype', 'Unknown'),
-        filename=file.filename
+        filename=file.filename,
+        web_context=prediction.get('web_context', ''),
+        prompt_data=prediction.get('prompt', ''),
+        llm_response=prediction.get('raw_response', '')
     )
 
 @app.route('/confirm', methods=['POST'])
