@@ -28,7 +28,7 @@ class Model(db.Model):
 def web_enrich_prompt(filename):
     try:
         query = filename.replace('_', ' ').replace('-', ' ')
-        search_terms = f"{query} site:patreon.com OR site:thingiverse.com OR site:printables.com"
+        search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(search_terms, max_results=5):
