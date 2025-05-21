@@ -91,7 +91,13 @@ Return JSON with: creator, filename, filetype.
         start = response.find('{')
         end = response.rfind('}') + 1
         json_str = response[start:end]
-        return json.loads(json_str)
+        llm_response = json.loads(json_str)
+        return {
+            "llm_response": llm_response,
+            "web_context": web_context,
+            "prompt": prompt,
+            "raw_response": response
+        }
 
     except Exception as e:
         return {"error": f"LLM call failed: {str(e)}"}
@@ -101,8 +107,17 @@ def analyze_stl(filepath):
     if "error" in metadata:
         return metadata
 
-    prediction = call_local_llm(metadata)
-    return prediction
+    result = call_local_llm(metadata)
+    if "error" in result:
+        return result
+
+    # Merge LLM response and context fields for template
+    return {
+        **result["llm_response"],
+        "web_context": result["web_context"],
+        "prompt": result["prompt"],
+        "raw_response": result["raw_response"]
+    }
 
 @app.route('/')
 def index():
