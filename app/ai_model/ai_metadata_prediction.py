@@ -1,7 +1,6 @@
-
 import os
 import json
-import subprocess
+import requests
 from stl import mesh
 from duckduckgo_search import DDGS
 
@@ -56,23 +55,23 @@ Predict:
 Return JSON with: creator, filename, filetype.
 """
     try:
-        result = subprocess.run(
-            ["ollama", "run", "llama3"],
-            input=prompt.encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=30
+        response = requests.post(
+            "http://host.docker.internal:11434/api/generate",
+            json={
+                "model": "llama3",
+                "prompt": prompt,
+                "stream": False
+            },
+            timeout=60
         )
+        response.raise_for_status()
+        result = response.json()
+        output = result.get("response", "")
 
-        if result.returncode != 0:
-            return {"error": result.stderr.decode("utf-8")}
-
-        response = result.stdout.decode("utf-8")
-
-        # Try to extract JSON from response
-        start = response.find('{')
-        end = response.rfind('}') + 1
-        json_str = response[start:end]
+        # Try to extract JSON from output
+        start = output.find('{')
+        end = output.rfind('}') + 1
+        json_str = output[start:end]
         return json.loads(json_str)
 
     except Exception as e:
