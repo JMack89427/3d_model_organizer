@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Ensure .env variables are loaded before using os.getenv
 
-API_KEY = os.getenv("GOOGLE_API_KEY")
-CX = os.getenv("GOOGLE_SEARCH_CX")
+API_KEY = os.getenv("VERTEX_API_KEY")
+APP_ID = os.getenv("VERTEX_SEARCH_APP_ID")
+DATASTORE_ID = os.getenv("VERTEX_DATASTORE_ID")
 
 SUPPORTED_EXTENSIONS = {'.stl', '.obj', '.3mf', '.step', '.stp'}
 
@@ -50,56 +51,34 @@ def extract_metadata(filepath):
     }
 
 def web_enrich_prompt(filename):
-    if not API_KEY or not CX:
-        print("Missing API_KEY or CX. Check your .env file.")
-        return "(Google API key or cx not set)"
-    
-    # Create a cleaner, simpler query
-    base = os.path.splitext(filename)[0]
-    query = base.replace('_', ' ').replace('-', ' ')
-    
-    # Target specific 3D model sites in the query
-    query = f"{query} 3D model"
-    
-    url = "https://www.googleapis.com/customsearch/v1"
-    params = {
-        "key": API_KEY,
-        "cx": CX,
-        "q": query,
-        "num": 5
+    if not API_KEY or not APP_ID or not DATASTORE_ID:
+        return "(Vertex AI config missing)"
+
+    query = filename.replace('_', ' ').replace('-', ' ')
+    # url = f"https://discoveryengine.googleapis.com/v1alpha/{APP_ID}/servingConfigs/default_search:search"
+    url = (
+    "https://discoveryengine.googleapis.com/v1alpha/"
+    f"projects/{APP_ID}/locations/global/collections/default_collection/"
+    f"dataStores/{DATASTORE_ID}/servingConfigs/default_search:search"
+    )
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": API_KEY,
     }
 
-    print(f"Making Google Custom Search request with query: {query}")
-    print(f"API endpoint: {url}")
-    print(f"Using CX: {CX[:5]}...{CX[-5:] if len(CX) > 10 else CX}")  # Print partial CX for debugging but keep mostly hidden
+    data = {
+        "query": query,
+        "pageSize": 5,
+    }
 
     try:
-        resp = requests.get(url, params=params)
-        if resp.status_code != 200:
-            print(f"Google Search API error - Status Code: {resp.status_code}")
-            print(f"Response: {resp.text[:200]}...")  # Print beginning of error response
-            return f"(Google Search error: {resp.status_code})"
-
-        data = resp.json()
-        if "items" not in data or not data["items"]:
-            print("No search results found")
-            return "(No relevant search results found)"
-
-        # Extract creator info from search results when possible
-        snippets = []
-        for item in data.get("items", []):
-            title = item.get('title', '')
-            snippet = item.get('snippet', '')
-            if "by " in title.lower() or "creator" in snippet.lower():
-                snippets.append(f"{title}: {snippet}")
-            else:
-                snippets.append(snippet)
-                
-        return "\n".join(snippets[:5])  # Limit to 5 results
-
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        results = response.json().get("results", [])
+        return "\n".join(r["document"]["derivedStructData"]["snippet"] for r in results if "document" in r)
     except Exception as e:
-        print(f"Exception during Google search: {str(e)}")
-        return f"(Google search failed: {str(e)})"
+        return f"(Vertex search failed: {str(e)})"
 
 def call_local_llm(metadata_dict, web_context=""):
     prompt = f"""
