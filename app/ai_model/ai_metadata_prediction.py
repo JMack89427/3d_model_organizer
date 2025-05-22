@@ -4,7 +4,12 @@ import trimesh
 import meshio
 import requests
 from stl import mesh as stlmesh
-from duckduckgo_search import DDGS
+from dotenv import load_dotenv
+
+load_dotenv()  # Ensure .env variables are loaded before using os.getenv
+
+API_KEY = os.getenv("GOOGLE_API_KEY")
+CX = os.getenv("GOOGLE_SEARCH_CX")
 
 SUPPORTED_EXTENSIONS = {'.stl', '.obj', '.3mf', '.step', '.stp'}
 
@@ -44,41 +49,57 @@ def extract_metadata(filepath):
         "filename": os.path.basename(filepath)
     }
 
-
-# def web_enrich_prompt(filename):
-#     try:
-#         query = filename.replace('_', ' ').replace('-', ' ')
-#         search_terms = f"{query} site:patreon.com OR site:myminifactory.com OR site:printables.com"
-#         results = []
-#         with DDGS() as ddgs:
-#             for r in ddgs.text(search_terms, max_results=5):
-#                 results.append(f"{r['title']}: {r['body']}")
-#         return "\n".join(results)
-#     except Exception as e:
-#         return f"(Web enrichment failed: {str(e)})"
 def web_enrich_prompt(filename):
-    try:
-        base = os.path.splitext(filename)[0]
-        chunks = base.replace('-', ' ').replace('_', ' ').split()
-        search_terms_list = [chunk for chunk in set(chunks) if len(chunk) > 2]
-        if not search_terms_list:
-            return ""
-        query_terms = " ".join(search_terms_list)
-        results = []
-        sites = ["patreon.com", "myminifactory.com", "printables.com"]
-        with DDGS() as ddgs:
-            for site in sites:
-                query = f"{query_terms} site:{site}"
-                for i, r in enumerate(ddgs.text(query, max_results=2)):  # Limit to 2 results per site
-                    title = r.get('title', '').strip()
-                    body = r.get('body', '').strip().split('\n')[0]  # Only first line of body
-                    if title or body:
-                        results.append(f"{title}: {body}")
-        # Limit total results to 5
-        return "\n".join(results[:5])
-    except Exception as e:
-        return f"(Web enrichment failed: {str(e)})"
+    if not API_KEY or not CX:
+        print("Missing API_KEY or CX. Check your .env file.")
+        return "(Google API key or cx not set)"
+    
+    # Create a cleaner, simpler query
+    base = os.path.splitext(filename)[0]
+    query = base.replace('_', ' ').replace('-', ' ')
+    
+    # Target specific 3D model sites in the query
+    query = f"{query} 3D model"
+    
+    url = "https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": API_KEY,
+        "cx": CX,
+        "q": query,
+        "num": 5
+    }
 
+    print(f"Making Google Custom Search request with query: {query}")
+    print(f"API endpoint: {url}")
+    print(f"Using CX: {CX[:5]}...{CX[-5:] if len(CX) > 10 else CX}")  # Print partial CX for debugging but keep mostly hidden
+
+    try:
+        resp = requests.get(url, params=params)
+        if resp.status_code != 200:
+            print(f"Google Search API error - Status Code: {resp.status_code}")
+            print(f"Response: {resp.text[:200]}...")  # Print beginning of error response
+            return f"(Google Search error: {resp.status_code})"
+
+        data = resp.json()
+        if "items" not in data or not data["items"]:
+            print("No search results found")
+            return "(No relevant search results found)"
+
+        # Extract creator info from search results when possible
+        snippets = []
+        for item in data.get("items", []):
+            title = item.get('title', '')
+            snippet = item.get('snippet', '')
+            if "by " in title.lower() or "creator" in snippet.lower():
+                snippets.append(f"{title}: {snippet}")
+            else:
+                snippets.append(snippet)
+                
+        return "\n".join(snippets[:5])  # Limit to 5 results
+
+    except Exception as e:
+        print(f"Exception during Google search: {str(e)}")
+        return f"(Google search failed: {str(e)})"
 
 def call_local_llm(metadata_dict, web_context=""):
     prompt = f"""
@@ -123,7 +144,7 @@ Return JSON with: creator, filename, filetype.
             "llm_response": llm_response,
             "web_context": web_context,
             "prompt": prompt,
-            "raw_response": response
+            "raw_response": output
         }
 
     except Exception as e:
@@ -136,5 +157,14 @@ def analyze_stl(filepath, enrich_with_web=True):
         return metadata
 
     web_context = web_enrich_prompt(metadata["filename"]) if enrich_with_web else ""
-    prediction = call_local_llm(metadata, web_context=web_context)
-    return prediction
+    result = call_local_llm(metadata, web_context=web_context)
+    if "error" in result:
+        return result
+        
+    # Merge LLM response and context fields
+    return {
+        **result["llm_response"],
+        "web_context": result["web_context"],
+        "prompt": result["prompt"],
+        "raw_response": result["raw_response"]
+    }

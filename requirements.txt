@@ -7,3 +7,4 @@ numpy
 trimesh
 meshio
 duckduckgo-search
+python-dotenv

@@ -14,6 +14,7 @@ uploads/*
 backup
 !uploads/.gitkeep
 !instance/.gitkeep
+.env
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
